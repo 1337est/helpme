@@ -1,0 +1,534 @@
+* Installing Arch Linux
+
+** Preinstallation
+
+   Go to this website to download the install medium:
+   {https://archlinux.org/download/}[Arch download site]
+
+   As of 2025-05-19 it is recommended to use the BitTorrent Download. Navigate to where that file downloaded (for me it's `~/Downloads`), then use your torrent client to extract the `.iso` file.
+
+   @code bash
+   cd ~/Downloads
+   qbittorrent ~/Downloads/archlinux-2025.05.01-x86_64.iso.torrent
+   @end
+
+   Once you've got the `.iso` image file, it's then time to verify the `.iso` image for its integrity. You can do this by downloading the `sha256sums.txt` and/or `b2sums.txt` from the same website above. I had to manually create these `.txt` by opening the links, then right clicking the page to "Save Page As...", and then saved them to my `~/Downloads` directory. The run the commands:
+
+   @code bash
+   # Verify the checksums
+   b2sum -c b2sums.txt --ignore-missing
+   sha256sum -c sha256sums.txt --ignore-missing
+   @end
+
+   Now we verify the PGP signature from the website. Again, we simply download it from the website and this saves the iso.sig file to ~/Downloads. After downloading it, enter the below command:
+
+   @code bash
+   gpg --keyserver-options auto-key-retrieve --verify archlinux-2025.05.01-x86_64.iso.sig archlinux-2025.05.01-x86_64.iso
+   @end
+
+   Now that we've checked the "integrity" of our `.iso` file, now we can prepare an installation medium with it. I'll be doing the USB method. To find out the name of your USB drive, type in the command:
+
+   @code bash
+   ls -l /dev/disk/by-id/usb-*
+   lsblk # should not show up i.e. it should not be mounted.
+   # if mounted, perform the below action
+   unmount /dev/disk/by-id/usb-yourusb
+   sudo dd if=path/to/archlinux-2025.05.01-x86_64.iso of=/dev/disk/by-id/usb-yourusb bs=4M conv=fsync oflag=direct status=progress
+   @end
+
+   When your `dd` command finishes, you can simply remove your installation medium (unless you wanted to reboot then immediately install arch linux on the current desktop by selecting it in your BIOS menu). The next steps are to reboot your computer with your usb stick plugged into the machine your wanted to install arch linux on.
+
+   From the arch wiki:
+   > To switch to a different console--for example, to view this guide with Lynx alongside the installation--use the `Alt+arrow` shortcut. To edit configuration files, mcedit(1), nano and vim are available. See pkglist.x86_64.txt for a list of the packages included in the installation medium.
+
+** Within the installation medium
+
+   There's no need to set the console keymap as the default is set to US already, and the font size if needed to set can be set using `setfont selected-font`. Fonts can be viewed by listing the files located here: `/usr/share/kbd/consolefonts/`. If you are having problems with HiDPI screens, try running:
+
+   @code bash
+
+   setfont ter-132b
+
+   @end
+
+   Now we'll dive into more settings:
+
+   @code bash
+
+   # Verify the boot mode: 64 or 32
+   cat /sys/firmware/efi/fw_platform_size
+
+   # Check for internet connection
+   ping google.com # if connected skip to `timedatectl`
+   ip link
+   iwctl device list
+   iwctl device "name" set-property Powered on
+   iwctl adapter "adapter" set-property Powered on
+   iwctl station "name" scan
+   iwctl station "name" get-networks
+   # You may omit passphrase if there is no passphrase
+   iwctl --passphrase "passphrase" station "name" connect "Network name"
+   # Then check for connectivity again using the ping command above
+   ping google.com
+
+   # Once internet connection is established, verify the time and date
+   timedatectl
+
+   # List your disk devices to find which one you want to delete!
+   lsblk
+   # Disk X: overwrite/delete the disk
+   dd if=/dev/zero of=/dev/nvme0n1 bs=4M status=progress
+   dd if=/dev/zero of=/dev/nvme1n1 bs=4M status=progress
+   # dd if=/dev/zero of=/dev/nvme2n1 bs=4M status=progress
+   # dd if=/dev/zero of=/dev/nvme3n1 bs=4M status=progress
+   # Verify the wipe overwrite/delete commands worked
+   lsblk
+
+   # Wipe all existing partition data on Disk 0 (nvme0n1) to clear GPT & MBR
+   sgdisk --zap-all /dev/nvme0n1 
+   sgdisk --zap-all /dev/nvme1n1 
+   # sgdisk --zap-all /dev/nvme2n1 
+   # sgdisk --zap-all /dev/nvme3n1 
+
+   # Create 512 MiB EFI partition 1 on Disk 0 (nvme0n1)
+   sgdisk --new=1:0:+512M --typecode=1:ef00 --change-name=1:"EFI system partition" /dev/nvme0n1
+   partprobe
+
+   # Create 4GiB BIOS Boot partition 2 on Disk 0 (nvme0n1)
+   sgdisk --new=2:0:+4G --typecode=2:ef02 --change-name=2:"BIOS boot partition" /dev/nvme0n1
+   partprobe
+
+   # Create encrypted Linux LUKS partition 3 on Disk 0 (nvme0n1)
+   sgdisk --new=3:0:0 --typecode=3:8309 --change-name=3:"Linux LUKS" /dev/nvme0n1
+   partprobe
+
+   # Create a new partition spanning the entire disk
+   sgdisk --new=1:0:0 --typecode=1:8302 --change-name=1:"Linux /home" /dev/nvme1n1
+   partprobe
+
+   # [OPTIONAL] Disk 2: NullSpace - Name of drive. Where I store Extra Stuff
+   # sgdisk --new=1:0:0 --typecode=1:8300 --change-name=1:"Linux filesystem" /dev/nvme2n1
+   # partprobe
+
+   # [OPTIONAL] Disk 3: OnFact - Means O(n!), lots of space here. Massive drive for more Extra Stuff?
+   # sgdisk --new=1:0:0 --typecode=1:8300 --change-name=1:"Linux filesystem" /dev/nvme3n1
+   # partprobe
+
+   modprobe dm-crypt
+   modprobe dm-mod
+
+   # Format the EFI partition with FAT32, as required by UEFI firmware
+   mkfs.fat -F32 /dev/nvme0n1p1
+   # Format the BIOS boot partition with ext4 filesystem
+   mkfs.ext4 /dev/nvme0n1p2
+   # Format the new partition with LUKS encryption
+   # -v: verbose, -s 512: key size, -h sha512: hash algorithm
+   cryptsetup luksFormat -v -s 512 -h sha512 /dev/nvme0n1p3
+   cryptsetup luksFormat -v -s 512 -h sha512 /dev/nvme1n1p1
+   # Open the encrypted LUKS container and map it to /dev/mapper/luks-lvm
+   cryptsetup open /dev/nvme0n1p3 luks-lvm
+   # Open the encrypted LUKS container and map it to /dev/mapper/arch-home
+   cryptsetup open /dev/nvme1n1p1 arch-home
+   # Initialize the LUKS container as a physical volume for LVM
+   pvcreate /dev/mapper/luks-lvm
+   # Create a volume group named "arch" using the encrypted physical volume
+   vgcreate arch /dev/mapper/luks-lvm
+   # Find out how much memory your system has with this command, then add 2 to the "total"
+   # This ensures all data can be stored into memory
+   free -h
+   # Create a 66 GiB swap logical volume named "swap" in the "arch" volume group
+   # -C y: allocate space contiguously for better performance
+   lvcreate -n swap -L 66G -C y arch
+   # Format the swap volume and label it "Ouroboros"
+   mkswap -L Ouroboros /dev/mapper/arch-swap
+   # Create a logical volume named "root" using all remaining space in the "arch" group
+   lvcreate -n root -l +100%FREE arch
+   # Format the root logical volume with Btrfs and label it "Geodesic"
+   # "Geodesic" refers to the shortest path in curved space, symbolic for root
+   mkfs.btrfs -L Geodesic /dev/mapper/arch-root
+   # Format the unlocked volume with Btrfs and label it "AdriansHometel"
+   # "AdriansHometel" is a pun on the infamous Hilbert's Hotel, an infinite size Hotel.
+   # This is comical to me, because this is where I keep adding guests, making more room
+   # by shifting my guests around. My forever filling, infinite (in spirit) Hometel.
+   mkfs.btrfs -L AdriansHometel /dev/mapper/arch-home
+
+   # Enable swap (previously labeled "Ouroboros" on arch-swap)
+   swapon /dev/mapper/arch-swap
+   # Activate all defined swap spaces (from /etc/fstab, if applicable)
+   swapon -a
+
+   lsblk
+   # Mount the root filesystem to /mnt for installation
+   mount /dev/mapper/arch-root /mnt
+   mkdir -p /mnt/{home,boot}
+   mount /dev/nvme0n1p2 /mnt/boot
+   mount /dev/mapper/arch-home /mnt/home
+   mkdir /mnt/boot/efi
+   mount /dev/nvme0n1p1 /mnt/boot/efi
+
+   # Core System Packages and neovim packages
+   pacstrap -K /mnt base base-devel linux linux-firmware linux-docs neovim wl-clipboard python-pynvim ttf-jetbrains-mono-nerd ttf-nerd-fonts-symbols-mono lvm2 gptfdisk grub efibootmgr os-prober refind nushell ghostty
+
+   genfstab -U -p /mnt > /mnt/etc/fstab
+   arch-chroot /mnt /bin/bash
+
+   @end
+
+*** Within chroot
+
+    We need to edit `mkinitcpio.conf` to include necessary hooks for LUKS and LVM:
+
+    @code bash
+
+    nvim /etc/mkinitcpio.conf
+    HOOKS=(base udev autodetect modconf kms keyboard keymap consolefont block encrypt lvm2 filesystems fsck)
+    mkinitcpio -p linux # regenerate linux image
+
+    grub-install --efi-directory=/boot/efi
+    blkid /dev/nvme0n1p3 # Copy or note the string for the UUID="string"
+    nvim /etc/default/grub
+    GRUB_CMDLINE_LINUX_DEFAULT="loglevel=3 quiet cryptdevice=UUID=string:luks-lvm root=/dev/mapper/arch-root"
+
+    mkdir /secure
+    dd if=/dev/random of=/secure/root_keyfile.bin bs=512 count=8
+    dd if=/dev/random of=/secure/home_keyfile.bin bs=512 count=8
+    ls /secure # check our work
+    chmod 000 /secure/*
+    ls -lah /secure # ensure keyfiles exist with proper permissions
+    cryptsetup luksAddKey /dev/nvme0n1p3 /secure/root_keyfile.bin
+    cryptsetup luksAddKey /dev/nvme1n1p1 /secure/home_keyfile.bin
+
+    nvim /etc/mkinitcpio.conf
+    FILES=(/secure/root_keyfile.bin)
+    mkinitcpio -p linux
+    chmod 600 /boot/initramfs-linux*
+
+    blkid /dev/nvme1n1p1 # Copy or note the string for the UUID="string"
+    nvim /etc/crypttab
+    # <name>      <device>                                    <password>              <options>
+    # arch-home   UUID=string                                 /secure/home_keyfile.bin
+
+    grub-mkconfig -o /boot/grub/grub.cfg # enables grub for BIOS
+    grub-mkconfig -o /boot/efi/EFI/arch/grub.cfg # enables grub for UEFI systems
+
+    ln -sf /usr/share/zoneinfo/America/Chicago /etc/localtime
+    nvim /etc/systemd/timesyncd.conf
+    # NTP=0.arch.pool.ntp.org 1.arch.pool.ntp.org 2.arch.pool.ntp.org 3.arch.pool.ntp.org
+    # FallbackNTP=0.pool.ntp.org 1.pool.ntp.org
+    systemctl enable systemd-timesyncd.service
+    nvim /etc/locale.gen
+    # en_US.UTF-8 UTF-8
+    locale-gen
+    echo 'LANG=en_US.UTF-8' > /etc/locale.conf # echo your value to the file
+    cat /etc/locale.conf # check your value
+
+    # it stands for rec'tang'ular cu'boi'd (beelink)
+    echo 'tangyboi' > /etc/hostname
+    # In reference to the novel Flatland by Edwin A. Abbott (laptop)
+    echo 'flatboi' > /etc/hostname
+    cat /etc/hostname # check value
+
+    passwd # sets root password
+    chsh -l # check login shells to see if `/bin/nu` and `/usr/bin/nu` is in the list
+    useradd -m -G wheel -s /bin/nu adrian
+    passwd adrian # Sets the password for our new user
+    export EDITOR=nvim # Sets roots default editor to neovim
+    visudo
+    # %wheel ALL=(ALL:ALL) ALL
+
+    # Networking and Security
+    pacman -S --needed bluez bluez-utils iw iwd firewalld modemmanager clamav networkmanager networkmanager-docs
+    sudo systemctl enable bluetooth iwd firewalld ModemManager NetworkManager
+
+    # Before installing one of these, check if you have an amd or intel cpu.
+    lscpu | grep -E "Vendor ID|Model name|Virtualization"
+    pacman -S amd-ucode
+    # or
+    pacman -S intel-ucode
+
+    grub-mkconfig -o /boot/grub/grub.cfg
+    grub-mkconfig -o /boot/efi/EFI/arch/grub.cfg
+
+    exit
+
+    @end
+
+** Now we are back into the root@archiso
+
+   Now to cleanly unmount the installation target and reboot
+
+   @code bash
+
+   umount -R /mnt # Recursively unmounts all filesystems under /mnt
+   reboot now # While rebooting, remove installation medium
+
+   @end
+
+* After reboot checklist
+
+** Development Environment
+
+   @code nu
+
+   # Check for internet connection
+   ping google.com
+   nmtui
+   ping google.com
+
+   # Programming and Runtime Environments
+   sudo pacman -S --needed zig zls rustup lldb gdb gopls jdk-openjdk openjdk-doc postgresql logrotate
+   rustup default stable
+   sudo su - postgres
+   initdb --locale en_US.UTF-8 -D /var/lib/postgres/data
+   exit
+   sudo systemctl start postgresql
+   sudo su - postgres
+   createuser --interactive
+   # Enter your_linux_username
+   # Should new role be a superuser?: yes
+   exit
+   sudo systemctl restart postgresql
+
+   # Neovim dependencies with my current plugin ecosystem
+   sudo pacman -S --needed luarocks lua51 # For lazy.nvim package manager
+   sudo pacman -S --needed wget unzip ruby rubygems composer npm julia python-pip # For mason.nvim
+   sudo pacman -S --needed tree-sitter-cli # For nvim-treesitter
+
+   # Version Control & AUR Helper
+   sudo pacman -S --needed git lazygit github-cli stow openssh
+   sudo systemctl enable --now sshd
+   git clone https://aur.archlinux.org/paru.git
+   cd paru
+   makepkg -si
+   paru --gendb
+   cd ../
+   rm -r paru/
+
+   cd
+mkdir ~/Code/gh/
+   git clone https://github.com/1337est/dotfiles.git ~/Code/dotfiles
+   ~/Code/dotfiles/configs/confighome/shellements/nushell/scripts/stow/clean.nu
+   sudo cp ~/Code/dotfiles/resources/system-etc/pacman.conf /etc/
+   sudo pacman -Syu
+   sudo cp ~/Code/dotfiles/resources/system-etc/pam_env.conf /etc/
+
+   paru -S --needed hyprland cmake hyprlock hypridle hyprpaper hyprpicker hyprshot hyprpolkitagent xdg-desktop-portal-hyprland grim slurp waybar otf-font-awesome mako jq kanshi copyq rofi-wayland sddm noto-fonts sddm-astronaut-theme qt6-multimedia-ffmpeg
+   sudo systemctl enable sddm.service
+   sudo cp ~/Code/dotfiles/resources/system-etc/sddm.conf /etc/
+   sudo mkdir /etc/sddm.conf.d
+   sudo cp ~/Code/dotfiles/resources/system-etc/sddm.conf.d/virtualkbd.conf /etc/sddm.conf.d/
+
+   # Web
+   paru -S --needed brave-bin qbittorrent
+
+   # Synchronization
+   sudo pacman -S --needed syncthing rclone rsync
+
+   # Device Brightness
+   sudo pacman -S --needed brightnessctl
+
+   # Image
+   sudo pacman -S --needed gimp imv swappy viu
+
+   # Audio Tools
+   sudo pacman -S --needed qpwgraph audacity audacity-docs ffmpeg
+
+   # Video
+   sudo pacman -S --needed avidemux-qt wf-recorder mpv obs-studio libva-intel-driver qrcodegencpp-cmake v4l2loopback-dkms
+
+   # Printing
+   sudo pacman -S --needed cups cups-pdf colord system-config-printer
+   sudo systemctl enable --now cups.service
+   # Print out your printers network settings and find the <IPP> section
+   ipptool -tv https://<ip-address>:631/ipp/print get-printer-attributes.test
+   | ^grep -E "ipp-versions-supported|document-format-supported|get-printer-attributes|printer-uri-supported|printer-info|printer-make-and-model|printer-resolution-default|printer-resolution-supported|print-color-mode-default|print-color-mode-supported|printer-location"
+   # The output should have at least these values:
+   # - The `get-printer-attributes` returns `PASS`
+   # - The IPP version that the printer supports is 2.0 or higher
+   # - The list of formats contains ONE of the following: `application/pdf`, `image/urf`, `image/pwg-raster`
+   # - For color printers, the output contains one of the above formats AND `image/jpeg`
+   cupsctl --share-printers
+   lpadmin -p name_of_printer -E -D "Description of Printer" -L "Location of Printer" -v ipps://<ip-address>:631/ipp/print -m everywhere -o printer-is-shared=true
+   # -p is just the name of the printer. You can put anything you want technically
+   # -E enables the printer and accepts new print jobs immediately
+   # -D is the description for the printer
+   # -L is the location of the printer
+   # -v is one of the printer-uri-supported values
+   # -m is the driver, and must be everywhere. All others are deprecated.
+   # -o printer-is-shared=true just means it's a shared printer
+   lpoptions -d name_of_printer
+   # Now list the default options for your printer
+   lpoptions -p name_of_printer -l
+   # If the default options are not to your liking, here is an example with the defaults
+   lpoptions -p name_of_printer -o PageSize=Letter -o MediaType=Stationery -o cupsPrintQuality=Normal -o ColorModel=RGB -o Duplex=None
+
+   # plug in usb drive to transfer over your gpg and ssh keys
+   sudo mkdir /mnt/usb
+   sudo mount /dev/sda1 /mnt/usb
+   cp -r /mnt/usb/Code ~/
+   cp -r /mnt/usb/Desktop ~/
+   cp -r /mnt/usb/Documents ~/
+   cp -r /mnt/usb/Pictures ~/
+   mkdir ~/.gnupg
+   cp -r /mnt/usb/.secrets/.gnupg/* ~/.gnupg
+   mkdir ~/.ssh
+   cp -r /mnt/usb/.secrets/.ssh/* ~/.ssh
+   chmod 700 ~/.gnupg ~/.ssh ~/.gnupg/crls.d/ ~/.gnupg/openpgp-revocs.d/ ~/.gnupg/private-keys-v1.d/
+   chmod 600 ~/.ssh/* ~/.gnupg/sshcontrol ~/.gnupg/pubring.kbx ~/.gnupg/random_seed ~/.gnupg/trustdb.gpg ~/.gnupg/pubring.kbx~ ~/.gnupg/gpg-agent.conf ~/.gnupg/private-keys-v1.d/* ~/.gnupg/openpgp-revocs.d/* ~/.gnupg/crls.d/*
+   # reboot to go into desktop environment
+   sudo reboot
+
+   # After reboot
+   git clone git@github.com:1337est/pass.git ~/.password-store/
+   git clone git@github.com:1337est/learn-stuff ~/Code/learn/
+git clone git@github.com:1337est/helpme.git ~/Desktop/notes/helpme/
+git clone git@github.com:1337est/books.git ~/Desktop/notes/books/
+git clone git@github.com:1337est/journal.git ~/Desktop/notes/journal/
+git clone git@github.com:1337est/vkGameEngine.git ~/Code/pjs/vkGameEngine/
+git clone git@github.com:1337est/simple-blog.git ~/Code/pjs/simple-blog/
+git clone git@github.com:1337est/job-search.git ~/Code/pjs/job-search/
+git clone git@github.com:1337est/templates.git ~/Templates/
+
+   # Social
+   sudo pacman -S --needed discord # TODO: libappindicator-gtk3
+
+   # Office Suite
+   sudo pacman -S --needed libreoffice-still pandoc-cli enscript ghostscript zathura zathura-pdf-mupdf zathura-djvu zathura-ps zathura-cb tesseract-data-eng pdfarranger img2pdf
+
+   # Calculator
+   sudo pacman -S --needed qalculate-gtk
+
+   # Dictionary Tools
+   sudo pacman -S --needed dictd
+
+   # vulkan-game-engine
+   sudo pacman -S --needed glm clang llvm vulkan-extra-layers vulkan-extra-tools vulkan-headers vulkan-html-docs vulkan-tools vulkan-utility-libraries vulkan-validation-layers
+
+   # Package and USB Utilities
+   sudo pacman -S --needed pacutils usbutils reflector
+
+   # Documentation Tools
+   sudo pacman -S --needed man-db man-pages tealdeer
+
+   # Audio System
+   sudo pacman -S --needed alsa-firmware alsa-utils sof-firmware pipewire pipewire-docs wireplumber wireplumber-docs pipewire-audio pipewire-alsa pipewire-pulse pipewire-jack pipewire-session-manager
+   systemctl --user enable --now pipewire-pulse
+
+   # GPU
+   sudo pacman -S --needed vulkan-radeon vulkan-mesa-layers nvtop
+
+   # Shell - nushell dependencies
+   paru -S --needed yazi 7zip ffmpeg imagemagick libultrahdr fzf ripgrep fd poppler zoxide chafa keychain starship atuin bat carapace-bin fish
+
+   # nushell script dependencies
+   # git yoyo.nu
+   sudo pacman -S --needed git
+   # himalaya gen_config.nu
+   sudo pacman -S --needed himalaya pass
+   # neomutt import-ics.nu
+   sudo pacman -S --needed khal
+   # neomutt mailto.nu
+   sudo pacman -S --needed neomutt
+   # neomutt sync.nu
+   sudo pacman -S --needed inotifywait mbsync notmuch
+   # stow
+   sudo pacman -S --needed stow vdirsyncer
+   # wf-recorder
+   sudo pacman -S --needed wf-recorder lib-pulse libnotify slurp
+
+   # System Monitoring
+   sudo pacman -S --needed btop rocm-smi-lib duf plocate fastfetch ddcutil
+   sudo updatedb
+
+   # Email, Calendar & Contacts
+   sudo pacman -S --needed himalaya pass ydotool qrencode neomutt isync msmtp goimapnotify notmuch w3m imlib2 libspectre vdirsyncer python-aiohttp-oauthlib khal khard
+   mbsync -a
+
+   ~/Code/dotfiles/configs/confighome/shellements/nushell/scripts/himalaya/gen_config.nu
+
+   sudo reboot
+   cp ~/.config/vdirsyncer/template ~/.config/vdirsyncer/config
+   nvim ~/.config/vdirsyncer/config # uncomment/change sanch, wife, and holidays to discover/sync
+   vdirsyncer discover
+   vdirsyncer sync
+   systemctl --user enable vdirsyncer.timer
+
+   # Font Configuration
+   # Go to Microsoft's Windows website to download the latest iso image into ~/Downloads
+   # Skip to copy the resources fonts if you've already downloaded the fonts
+   sudo pacman -S --needed lib32-fontconfig 7zip gtk2fontsel
+   mkdir ~/Downloads
+   cd ~/Downloads
+   7z e WinXY_YYMM_English_x64.iso sources/install.wim
+   7z e install.wim 1/Windows/{Fonts/"*".{ttf,ttc},System32/Licenses/neutral/"*"/"*"/license.rtf} -ofonts/
+   cd ~/Downloads/fonts
+
+   sudo mkdir /usr/local/share/fonts
+   sudo mkdir /usr/local/share/fonts/MicrosoftFonts
+   # If downloaded
+   sudo cp ./* /usr/local/share/fonts/MicrosoftFonts
+   # If taking from resources
+   sudo cp ~/Code/dotfiles/resources/MicrosoftFonts/* /usr/local/share/fonts/MicrosoftFonts
+   sudo chmod 644 /usr/local/share/fonts/MicrosoftFonts/*
+   sudo fc-cache --force
+   sudo fc-cache-32 --force # Ensure multilib is enabled in pacman.conf and you have lib32-fontconfig downloaded
+
+   # Keychron Q1 Max keyboard - Optional if you want to change your keyboard stuffs
+   sudo pacman -S --needed qmk python-appdirs wev
+   qmk setup
+   sudo cp /home/adrian/qmk_firmware/util/udev/50-qmk.rules /etc/udev/rules.d/
+   rm -r ~/qmk_firmware
+git clone https://github.com/Keychron/qmk_firmware ~/Code/gh/keychron_qmk_firmware
+cd ~/Code/gh/keychron_qmk_firmware/
+   git checkout wireless_playground
+cd ~/Code/gh/keychron_qmk_firmware/keyboards/keychron/q1_max/ansi_encoder/keymaps/
+   cp -r default adrian
+   qmk setup # Keep and continue, clone submodules
+   qmk hello # Install required Python modules with pacman
+   # edit the keymaps file if you need to
+nvim ~/Code/gh/keychron_qmk_firmware/keyboards/keychron/q1_max/ansi_encoder/keymaps/adrian/keymap.c
+   # or copy the one you have in your dotfiles resources
+cp ~/Code/dotfiles/resources/keymap.c ~/Code/gh/keychron_qmk_firmware/keyboards/keychron/q1_max/ansi_encoder/keymaps/adrian/keymap.c
+   # optionally make and flash if you made edits and need to change the layout
+cd ~/Code/gh/keychron_qmk_firmware/
+   make keychron/q1_max/ansi_encoder:adrian
+   # unplug the keyboard, ensure the mode is switched to "cable"
+   # hold down esc and replug in cable: keep esc held down the entire time
+   # Now that you know it works, edit the keymap.c file to your liking
+   make keychron/q1_max/ansi_encoder:adrian:flash
+   # Copy the changes to your resources if you made any changes
+cp ~/Code/gh/keychron_qmk_firmware/keyboards/keychron/q1_max/ansi_encoder/keymaps/adrian/keymap.c ~/Code/dotfiles/resources/
+
+   # TODO: nvim :Lazy :Mason TSUpdate/Sync and :checkhealth
+
+   @end
+
+
+* Extra Learning?
+
+  Let's stop to learn some stuff:
+
+  To learn more about the `/dev/zero` section, you can read `man 4 zero`. This will prompt you to ask, "What the heck is `/dev/null`?" and also, "What the heck is `mknod -m 666 /dev/zero c 1 5`?". Ultimately, you will learn that `/dev/null` is simply a special file that discards all data written to it, and produces nothing when read from, which is pretty easy to understand since `null` literally means nothing. Then you'll look into the `mknod` business. `mknod` is a Unix command used to create special files, such as character devices (`/dev/null`, `/dev/zero`, and `/dev/random`), block devices (like the `/dev/nvme0n1` from earlier), and named pipes (FIFOs) (we don't need to concern ourselves with named pipes), and all of these special files live in the `/dev` directory. The `mknod` command takes the format `mknod [options] name type major minor`. Well, what is the `name`? The `name` is simply the path of the device file to create. The `type` can either be `c` for character device, `b` for block device, or `p` for FIFO (named pipe), `major` is the major device number (identifies the driver), and `minor` is the minor device number that identifies the specific device the driver controls. With this knowledge let's look back at our command:
+
+  - `mknod` - The first part of the command.
+  - `-m 666` - One of the options, and sets the files permissions to 666. This means `rw-rw-rw-` -> anyone can read and write to the device.
+  - `c` - Denotes that we are creating a character device
+  - `1` - The major 1 here identifies this as part of the "memory devices" driver set for the kernel. How does 1 denote "memory devices" driver set? What other options are there? You can learn more by using this command: `less /usr/lib/modules/6.14.9-arch1-1/build/Documentation/admin-guide/devices.txt`. This is from the `linux-docs` package.
+  - `5` - The minor 5 here identifies the specific device as `/dev/zero`. The same `devices.txt` file can be used to learn more about the minor categories as well. Be warned and prepared!! Don't say I didn't warn you, lol.
+
+  Okokok... What the heck is a character device?
+
+  - Character devices are devices that allow data to be transmitted or received on byte at a time, like a stream. It's like a file you can read/write sequentially. These don't support random access. Instead, they behave more like pipes or serial ports.
+  -- Random access means you *can* jump to any position in a file or device and read/write there immediately. Random access is like being able to open a book to a page? Character devices in general do not support "random access", or this ability to jump around inside of the device. Character devices only allow sequential access. You must read/write in the order -- byte-by-byte.
+  --- A file on disk (`/etc/passwd`) -> you can open it and jump to byte 10,000
+  --- A block device like `/dev/nvme0n1` -> you can seek directly to sectore 2000.
+  -- A pipe is generally a one-way communication channel between processes. You don't seek something inside of a pipe, you simply read/write in/out in the order it was received:
+  --- `echo hello | cat`: Here, data flows in one direction. You can't "jump" to the middle of the stream.
+  -- A serial ports is an old school hardware connection where data comes in a stream -- bit by bit, in order. Think of how a keyboard or modem sends data: one character at a time.
+
+  Do you need to know any of this? Probably not, but it's fun.
+
+  What is `/dev/random`? It's a special file in Unix-like operating systems that serves as a blocking interface to the system's entropy pool -- it provides cryptographically secure random numbers. But what the heck does that mean? In short, it's a cryptographically secure random number generator (CSPRNG). It generates this CSPRNG by drawing from hardware-based, non-deterministic events such as: keypress timings, mouse movements, disk I/O jitter, interrupts, etc. You can find out more about what it using this command: `man 7 random`. This specific manual covers random and urandom.
+
+  Why do you need to know any of this? You don't, but now you have knowledge of what commands you are using and what's going on in your system!
+
