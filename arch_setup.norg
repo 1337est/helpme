@@ -8,32 +8,40 @@
    As of 2025-05-19 it is recommended to use the BitTorrent Download. Navigate to where that file downloaded (for me it's `~/Downloads`), then use your torrent client to extract the `.iso` file.
 
    @code bash
-   cd ~/Downloads
-   qbittorrent ~/Downloads/archlinux-2025.05.01-x86_64.iso.torrent
+
+cd ~/Downloads
+qbittorrent ~/Downloads/archlinux-2025.05.01-x86_64.iso.torrent
+
    @end
 
    Once you've got the `.iso` image file, it's then time to verify the `.iso` image for its integrity. You can do this by downloading the `sha256sums.txt` and/or `b2sums.txt` from the same website above. I had to manually create these `.txt` by opening the links, then right clicking the page to "Save Page As...", and then saved them to my `~/Downloads` directory. The run the commands:
 
    @code bash
-   # Verify the checksums
-   b2sum -c b2sums.txt --ignore-missing
-   sha256sum -c sha256sums.txt --ignore-missing
+
+# Verify the checksums
+b2sum -c b2sums.txt --ignore-missing
+sha256sum -c sha256sums.txt --ignore-missing
+
    @end
 
    Now we verify the PGP signature from the website. Again, we simply download it from the website and this saves the iso.sig file to ~/Downloads. After downloading it, enter the below command:
 
    @code bash
-   gpg --keyserver-options auto-key-retrieve --verify archlinux-2025.05.01-x86_64.iso.sig archlinux-2025.05.01-x86_64.iso
+
+gpg --keyserver-options auto-key-retrieve --verify archlinux-2025.05.01-x86_64.iso.sig archlinux-2025.05.01-x86_64.iso
+
    @end
 
    Now that we've checked the "integrity" of our `.iso` file, now we can prepare an installation medium with it. I'll be doing the USB method. To find out the name of your USB drive, type in the command:
 
    @code bash
-   ls -l /dev/disk/by-id/usb-*
-   lsblk # should not show up i.e. it should not be mounted.
-   # if mounted, perform the below action
-   unmount /dev/disk/by-id/usb-yourusb
-   sudo dd if=path/to/archlinux-2025.05.01-x86_64.iso of=/dev/disk/by-id/usb-yourusb bs=4M conv=fsync oflag=direct status=progress
+
+ls -l /dev/disk/by-id/usb-*
+lsblk # should not show up i.e. it should not be mounted.
+# if mounted, perform the below action
+unmount /dev/disk/by-id/usb-yourusb
+sudo dd if=path/to/archlinux-2025.05.01-x86_64.iso of=/dev/disk/by-id/usb-yourusb bs=4M conv=fsync oflag=direct status=progress
+
    @end
 
    When your `dd` command finishes, you can simply remove your installation medium (unless you wanted to reboot then immediately install arch linux on the current desktop by selecting it in your BIOS menu). The next steps are to reboot your computer with your usb stick plugged into the machine your wanted to install arch linux on.
@@ -47,7 +55,7 @@
 
    @code bash
 
-   setfont ter-132b
+setfont ter-132b
 
    @end
 
@@ -55,122 +63,122 @@
 
    @code bash
 
-   # Verify the boot mode: 64 or 32
-   cat /sys/firmware/efi/fw_platform_size
+# Verify the boot mode: 64 or 32
+cat /sys/firmware/efi/fw_platform_size
 
-   # Check for internet connection
-   ping google.com # if connected skip to `timedatectl`
-   ip link
-   iwctl device list
-   iwctl device "name" set-property Powered on
-   iwctl adapter "adapter" set-property Powered on
-   iwctl station "name" scan
-   iwctl station "name" get-networks
-   # You may omit passphrase if there is no passphrase
-   iwctl --passphrase "passphrase" station "name" connect "Network name"
-   # Then check for connectivity again using the ping command above
-   ping google.com
+# Check for internet connection
+ping google.com # if connected skip to `timedatectl`
+ip link
+iwctl device list
+iwctl device "name" set-property Powered on
+iwctl adapter "adapter" set-property Powered on
+iwctl station "name" scan
+iwctl station "name" get-networks
+# You may omit passphrase if there is no passphrase
+iwctl --passphrase "passphrase" station "name" connect "Network name"
+# Then check for connectivity again using the ping command above
+ping google.com
 
-   # Once internet connection is established, verify the time and date
-   timedatectl
+# Once internet connection is established, verify the time and date
+timedatectl
 
-   # List your disk devices to find which one you want to delete!
-   lsblk
-   # Disk X: overwrite/delete the disk
-   dd if=/dev/zero of=/dev/nvme0n1 bs=4M status=progress
-   dd if=/dev/zero of=/dev/nvme1n1 bs=4M status=progress
-   # dd if=/dev/zero of=/dev/nvme2n1 bs=4M status=progress
-   # dd if=/dev/zero of=/dev/nvme3n1 bs=4M status=progress
-   # Verify the wipe overwrite/delete commands worked
-   lsblk
+# List your disk devices to find which one you want to delete!
+lsblk
+# Disk X: overwrite/delete the disk
+dd if=/dev/zero of=/dev/nvme0n1 bs=4M status=progress
+dd if=/dev/zero of=/dev/nvme1n1 bs=4M status=progress
+# dd if=/dev/zero of=/dev/nvme2n1 bs=4M status=progress
+# dd if=/dev/zero of=/dev/nvme3n1 bs=4M status=progress
+# Verify the wipe overwrite/delete commands worked
+lsblk
 
-   # Wipe all existing partition data on Disk 0 (nvme0n1) to clear GPT & MBR
-   sgdisk --zap-all /dev/nvme0n1 
-   sgdisk --zap-all /dev/nvme1n1 
-   # sgdisk --zap-all /dev/nvme2n1 
-   # sgdisk --zap-all /dev/nvme3n1 
+# Wipe all existing partition data on Disk 0 (nvme0n1) to clear GPT & MBR
+sgdisk --zap-all /dev/nvme0n1 
+sgdisk --zap-all /dev/nvme1n1 
+# sgdisk --zap-all /dev/nvme2n1 
+# sgdisk --zap-all /dev/nvme3n1 
 
-   # Create 512 MiB EFI partition 1 on Disk 0 (nvme0n1)
-   sgdisk --new=1:0:+512M --typecode=1:ef00 --change-name=1:"EFI system partition" /dev/nvme0n1
-   partprobe
+# Create 512 MiB EFI partition 1 on Disk 0 (nvme0n1)
+sgdisk --new=1:0:+512M --typecode=1:ef00 --change-name=1:"EFI system partition" /dev/nvme0n1
+partprobe
 
-   # Create 4GiB BIOS Boot partition 2 on Disk 0 (nvme0n1)
-   sgdisk --new=2:0:+4G --typecode=2:ef02 --change-name=2:"BIOS boot partition" /dev/nvme0n1
-   partprobe
+# Create 4GiB BIOS Boot partition 2 on Disk 0 (nvme0n1)
+sgdisk --new=2:0:+4G --typecode=2:ef02 --change-name=2:"BIOS boot partition" /dev/nvme0n1
+partprobe
 
-   # Create encrypted Linux LUKS partition 3 on Disk 0 (nvme0n1)
-   sgdisk --new=3:0:0 --typecode=3:8309 --change-name=3:"Linux LUKS" /dev/nvme0n1
-   partprobe
+# Create encrypted Linux LUKS partition 3 on Disk 0 (nvme0n1)
+sgdisk --new=3:0:0 --typecode=3:8309 --change-name=3:"Linux LUKS" /dev/nvme0n1
+partprobe
 
-   # Create a new partition spanning the entire disk
-   sgdisk --new=1:0:0 --typecode=1:8302 --change-name=1:"Linux /home" /dev/nvme1n1
-   partprobe
+# Create a new partition spanning the entire disk
+sgdisk --new=1:0:0 --typecode=1:8302 --change-name=1:"Linux /home" /dev/nvme1n1
+partprobe
 
-   # [OPTIONAL] Disk 2: NullSpace - Name of drive. Where I store Extra Stuff
-   # sgdisk --new=1:0:0 --typecode=1:8300 --change-name=1:"Linux filesystem" /dev/nvme2n1
-   # partprobe
+# [OPTIONAL] Disk 2: NullSpace - Name of drive. Where I store Extra Stuff
+# sgdisk --new=1:0:0 --typecode=1:8300 --change-name=1:"Linux filesystem" /dev/nvme2n1
+# partprobe
 
-   # [OPTIONAL] Disk 3: OnFact - Means O(n!), lots of space here. Massive drive for more Extra Stuff?
-   # sgdisk --new=1:0:0 --typecode=1:8300 --change-name=1:"Linux filesystem" /dev/nvme3n1
-   # partprobe
+# [OPTIONAL] Disk 3: OnFact - Means O(n!), lots of space here. Massive drive for more Extra Stuff?
+# sgdisk --new=1:0:0 --typecode=1:8300 --change-name=1:"Linux filesystem" /dev/nvme3n1
+# partprobe
 
-   modprobe dm-crypt
-   modprobe dm-mod
+modprobe dm-crypt
+modprobe dm-mod
 
-   # Format the EFI partition with FAT32, as required by UEFI firmware
-   mkfs.fat -F32 /dev/nvme0n1p1
-   # Format the BIOS boot partition with ext4 filesystem
-   mkfs.ext4 /dev/nvme0n1p2
-   # Format the new partition with LUKS encryption
-   # -v: verbose, -s 512: key size, -h sha512: hash algorithm
-   cryptsetup luksFormat -v -s 512 -h sha512 /dev/nvme0n1p3
-   cryptsetup luksFormat -v -s 512 -h sha512 /dev/nvme1n1p1
-   # Open the encrypted LUKS container and map it to /dev/mapper/luks-lvm
-   cryptsetup open /dev/nvme0n1p3 luks-lvm
-   # Open the encrypted LUKS container and map it to /dev/mapper/arch-home
-   cryptsetup open /dev/nvme1n1p1 arch-home
-   # Initialize the LUKS container as a physical volume for LVM
-   pvcreate /dev/mapper/luks-lvm
-   # Create a volume group named "arch" using the encrypted physical volume
-   vgcreate arch /dev/mapper/luks-lvm
-   # Find out how much memory your system has with this command, then add 2 to the "total"
-   # This ensures all data can be stored into memory
-   free -h
-   # Create a 66 GiB swap logical volume named "swap" in the "arch" volume group
-   # -C y: allocate space contiguously for better performance
-   lvcreate -n swap -L 66G -C y arch
-   # Format the swap volume and label it "Ouroboros"
-   mkswap -L Ouroboros /dev/mapper/arch-swap
-   # Create a logical volume named "root" using all remaining space in the "arch" group
-   lvcreate -n root -l +100%FREE arch
-   # Format the root logical volume with Btrfs and label it "Geodesic"
-   # "Geodesic" refers to the shortest path in curved space, symbolic for root
-   mkfs.btrfs -L Geodesic /dev/mapper/arch-root
-   # Format the unlocked volume with Btrfs and label it "AdriansHometel"
-   # "AdriansHometel" is a pun on the infamous Hilbert's Hotel, an infinite size Hotel.
-   # This is comical to me, because this is where I keep adding guests, making more room
-   # by shifting my guests around. My forever filling, infinite (in spirit) Hometel.
-   mkfs.btrfs -L AdriansHometel /dev/mapper/arch-home
+# Format the EFI partition with FAT32, as required by UEFI firmware
+mkfs.fat -F32 /dev/nvme0n1p1
+# Format the BIOS boot partition with ext4 filesystem
+mkfs.ext4 /dev/nvme0n1p2
+# Format the new partition with LUKS encryption
+# -v: verbose, -s 512: key size, -h sha512: hash algorithm
+cryptsetup luksFormat -v -s 512 -h sha512 /dev/nvme0n1p3
+cryptsetup luksFormat -v -s 512 -h sha512 /dev/nvme1n1p1
+# Open the encrypted LUKS container and map it to /dev/mapper/luks-lvm
+cryptsetup open /dev/nvme0n1p3 luks-lvm
+# Open the encrypted LUKS container and map it to /dev/mapper/arch-home
+cryptsetup open /dev/nvme1n1p1 arch-home
+# Initialize the LUKS container as a physical volume for LVM
+pvcreate /dev/mapper/luks-lvm
+# Create a volume group named "arch" using the encrypted physical volume
+vgcreate arch /dev/mapper/luks-lvm
+# Find out how much memory your system has with this command, then add 2 to the "total"
+# This ensures all data can be stored into memory
+free -h
+# Create a 66 GiB swap logical volume named "swap" in the "arch" volume group
+# -C y: allocate space contiguously for better performance
+lvcreate -n swap -L 66G -C y arch
+# Format the swap volume and label it "Ouroboros"
+mkswap -L Ouroboros /dev/mapper/arch-swap
+# Create a logical volume named "root" using all remaining space in the "arch" group
+lvcreate -n root -l +100%FREE arch
+# Format the root logical volume with Btrfs and label it "Geodesic"
+# "Geodesic" refers to the shortest path in curved space, symbolic for root
+mkfs.btrfs -L Geodesic /dev/mapper/arch-root
+# Format the unlocked volume with Btrfs and label it "AdriansHometel"
+# "AdriansHometel" is a pun on the infamous Hilbert's Hotel, an infinite size Hotel.
+# This is comical to me, because this is where I keep adding guests, making more room
+# by shifting my guests around. My forever filling, infinite (in spirit) Hometel.
+mkfs.btrfs -L AdriansHometel /dev/mapper/arch-home
 
-   # Enable swap (previously labeled "Ouroboros" on arch-swap)
-   swapon /dev/mapper/arch-swap
-   # Activate all defined swap spaces (from /etc/fstab, if applicable)
-   swapon -a
+# Enable swap (previously labeled "Ouroboros" on arch-swap)
+swapon /dev/mapper/arch-swap
+# Activate all defined swap spaces (from /etc/fstab, if applicable)
+swapon -a
 
-   lsblk
-   # Mount the root filesystem to /mnt for installation
-   mount /dev/mapper/arch-root /mnt
-   mkdir -p /mnt/{home,boot}
-   mount /dev/nvme0n1p2 /mnt/boot
-   mount /dev/mapper/arch-home /mnt/home
-   mkdir /mnt/boot/efi
-   mount /dev/nvme0n1p1 /mnt/boot/efi
+lsblk
+# Mount the root filesystem to /mnt for installation
+mount /dev/mapper/arch-root /mnt
+mkdir -p /mnt/{home,boot}
+mount /dev/nvme0n1p2 /mnt/boot
+mount /dev/mapper/arch-home /mnt/home
+mkdir /mnt/boot/efi
+mount /dev/nvme0n1p1 /mnt/boot/efi
 
-   # Core System Packages and neovim packages
-   pacstrap -K /mnt base base-devel linux linux-firmware linux-docs neovim wl-clipboard python-pynvim ttf-jetbrains-mono-nerd ttf-nerd-fonts-symbols-mono lvm2 gptfdisk grub efibootmgr os-prober refind nushell ghostty
+# Core System Packages and neovim packages
+pacstrap -K /mnt base base-devel linux linux-firmware linux-docs neovim wl-clipboard python-pynvim ttf-jetbrains-mono-nerd ttf-nerd-fonts-symbols-mono lvm2 gptfdisk grub efibootmgr os-prober refind nushell ghostty
 
-   genfstab -U -p /mnt > /mnt/etc/fstab
-   arch-chroot /mnt /bin/bash
+genfstab -U -p /mnt > /mnt/etc/fstab
+arch-chroot /mnt /bin/bash
 
    @end
 
@@ -305,14 +313,14 @@
    rm -r paru/
 
    cd
-mkdir ~/Code/gh/
+   mkdir ~/Code/gh/
    git clone https://github.com/1337est/dotfiles.git ~/Code/dotfiles
    ~/Code/dotfiles/configs/confighome/shellements/nushell/scripts/stow/clean.nu
    sudo cp ~/Code/dotfiles/resources/system-etc/pacman.conf /etc/
    sudo pacman -Syu
    sudo cp ~/Code/dotfiles/resources/system-etc/pam_env.conf /etc/
 
-   paru -S --needed hyprland cmake hyprlock hypridle hyprpaper hyprpicker hyprshot hyprpolkitagent xdg-desktop-portal-hyprland grim slurp waybar otf-font-awesome mako jq kanshi copyq rofi-wayland sddm noto-fonts sddm-astronaut-theme qt6-multimedia-ffmpeg
+   paru -S --needed hyprland cmake hyprlock hypridle hyprpaper hyprpicker hyprshot hyprpolkitagent xdg-desktop-portal-hyprland nwg-look grim slurp waybar otf-font-awesome mako jq kanshi copyq rofi-wayland sddm noto-fonts sddm-astronaut-theme qt6-multimedia-ffmpeg
    sudo systemctl enable sddm.service
    sudo cp ~/Code/dotfiles/resources/system-etc/sddm.conf /etc/
    sudo mkdir /etc/sddm.conf.d
@@ -381,13 +389,13 @@ mkdir ~/Code/gh/
    # After reboot
    git clone git@github.com:1337est/pass.git ~/.password-store/
    git clone git@github.com:1337est/learn-stuff ~/Code/learn/
-git clone git@github.com:1337est/vkGameEngine.git ~/Code/pjs/vkGameEngine/
-git clone git@github.com:1337est/simple-blog.git ~/Code/pjs/simple-blog/
-git clone git@github.com:1337est/job-search.git ~/Code/pjs/job-search/
-git clone git@github.com:1337est/helpme.git ~/Desktop/notes/helpme/
-git clone git@github.com:1337est/books.git ~/Desktop/notes/books/
-git clone git@github.com:1337est/journal.git ~/Desktop/notes/journal/
-git clone git@github.com:1337est/templates.git ~/Templates/
+   git clone git@github.com:1337est/vkGameEngine.git ~/Code/pjs/vkGameEngine/
+   git clone git@github.com:1337est/simple-blog.git ~/Code/pjs/simple-blog/
+   git clone git@github.com:1337est/job-search.git ~/Code/pjs/job-search/
+   git clone git@github.com:1337est/helpme.git ~/Desktop/notes/helpme/
+   git clone git@github.com:1337est/books.git ~/Desktop/notes/books/
+   git clone git@github.com:1337est/journal.git ~/Desktop/notes/journal/
+   git clone git@github.com:1337est/templates.git ~/Templates/
 
    # Social
    sudo pacman -S --needed discord # TODO: libappindicator-gtk3
@@ -478,26 +486,26 @@ git clone git@github.com:1337est/templates.git ~/Templates/
    qmk setup
    sudo cp /home/adrian/qmk_firmware/util/udev/50-qmk.rules /etc/udev/rules.d/
    rm -r ~/qmk_firmware
-git clone https://github.com/Keychron/qmk_firmware ~/Code/gh/keychron_qmk_firmware
-cd ~/Code/gh/keychron_qmk_firmware/
+   git clone https://github.com/Keychron/qmk_firmware ~/Code/gh/keychron_qmk_firmware
+   cd ~/Code/gh/keychron_qmk_firmware/
    git checkout wireless_playground
-cd ~/Code/gh/keychron_qmk_firmware/keyboards/keychron/q1_max/ansi_encoder/keymaps/
+   cd ~/Code/gh/keychron_qmk_firmware/keyboards/keychron/q1_max/ansi_encoder/keymaps/
    cp -r default adrian
    qmk setup # Keep and continue, clone submodules
    qmk hello # Install required Python modules with pacman
    # edit the keymaps file if you need to
-nvim ~/Code/gh/keychron_qmk_firmware/keyboards/keychron/q1_max/ansi_encoder/keymaps/adrian/keymap.c
+   nvim ~/Code/gh/keychron_qmk_firmware/keyboards/keychron/q1_max/ansi_encoder/keymaps/adrian/keymap.c
    # or copy the one you have in your dotfiles resources
-cp ~/Code/dotfiles/resources/keymap.c ~/Code/gh/keychron_qmk_firmware/keyboards/keychron/q1_max/ansi_encoder/keymaps/adrian/keymap.c
+   cp ~/Code/dotfiles/resources/keymap.c ~/Code/gh/keychron_qmk_firmware/keyboards/keychron/q1_max/ansi_encoder/keymaps/adrian/keymap.c
    # optionally make and flash if you made edits and need to change the layout
-cd ~/Code/gh/keychron_qmk_firmware/
+   cd ~/Code/gh/keychron_qmk_firmware/
    make keychron/q1_max/ansi_encoder:adrian
    # unplug the keyboard, ensure the mode is switched to "cable"
    # hold down esc and replug in cable: keep esc held down the entire time
    # Now that you know it works, edit the keymap.c file to your liking
    make keychron/q1_max/ansi_encoder:adrian:flash
    # Copy the changes to your resources if you made any changes
-cp ~/Code/gh/keychron_qmk_firmware/keyboards/keychron/q1_max/ansi_encoder/keymaps/adrian/keymap.c ~/Code/dotfiles/resources/
+   cp ~/Code/gh/keychron_qmk_firmware/keyboards/keychron/q1_max/ansi_encoder/keymaps/adrian/keymap.c ~/Code/dotfiles/resources/
 
    # TODO: nvim :Lazy :Mason TSUpdate/Sync and :checkhealth
 
