@@ -500,10 +500,12 @@ arch-chroot /mnt /bin/bash
    # optionally make and flash if you made edits and need to change the layout
    cd ~/Code/gh/keychron_qmk_firmware/
    make keychron/q1_max/ansi_encoder:adrian
+   # Make sure the mode is switched to "cable", then enter the command below to flash
+   make keychron/q1_max/ansi_encoder:adrian:flash
    # unplug the keyboard, ensure the mode is switched to "cable"
    # hold down esc and replug in cable: keep esc held down the entire time
    # Now that you know it works, edit the keymap.c file to your liking
-   make keychron/q1_max/ansi_encoder:adrian:flash
+
    # Copy the changes to your resources if you made any changes
    cp ~/Code/gh/keychron_qmk_firmware/keyboards/keychron/q1_max/ansi_encoder/keymaps/adrian/keymap.c ~/Code/dotfiles/resources/
 
